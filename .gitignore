@@ -1,0 +1,7 @@
+__pycache__/
+driver/build/
+
+# Local copies, not part of the repo: the Linuwu-Sense clone used while
+# developing, and Acer's proprietary Windows installer used for reference.
+linuwu_sense/
+Nitro Sense_Acer_*/
