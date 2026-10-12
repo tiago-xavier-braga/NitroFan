@@ -1,0 +1,26 @@
+Add the Acer Nitro AN517-54 to the Linuwu-Sense model table.
+
+This patch modifies Linuwu-Sense (derived from the Linux kernel's acer-wmi
+driver) and is therefore distributed under the same terms: GPL-2.0-or-later
+(see SPDX header of src/linuwu_sense.c; the upstream repo ships GPL-3.0 text).
+
+diff --git a/src/linuwu_sense.c b/src/linuwu_sense.c
+index 025eacb..650d2cf 100644
+--- a/src/linuwu_sense.c
++++ b/src/linuwu_sense.c
+@@ -661,6 +661,15 @@ enum acer_wmi_predator_v4_oc {
+          },
+          .driver_data = &quirk_acer_nitro_legacy,
+      },
++     {
++         .callback = dmi_matched,
++         .ident = "Acer Nitro AN517-54",
++         .matches = {
++             DMI_MATCH(DMI_SYS_VENDOR, "Acer"),
++             DMI_MATCH(DMI_PRODUCT_NAME, "Nitro AN517-54"),
++         },
++         .driver_data = &quirk_acer_nitro_legacy,
++     },
+      {
+          .callback = dmi_matched,
+          .ident = "Acer Aspire 1360",
