@@ -15,7 +15,10 @@ from gi.repository import Adw, GLib, Gtk  # noqa: E402
 NITRO = "/sys/module/linuwu_sense/drivers/platform:acer-wmi/acer-wmi/nitro_sense"
 FAN_SPEED = os.path.join(NITRO, "fan_speed")
 MIN_MANUAL = 30        # abaixo disso o driver aceita, mas é arriscado
-DANGER_TEMP = 95       # °C: volta ao automático se passar disso em modo manual
+LIMIT_MIN, LIMIT_MAX, LIMIT_DEFAULT = 60, 95, 90   # °C: limite de temperatura
+PROFILE = "/sys/firmware/acpi/platform_profile"
+REAPPLY_TICKS = 15     # ticks de 2 s: reaplica o modo a cada 30 s
+CONFIG = os.path.join(GLib.get_user_config_dir(), "nitrofan", "temp_limit")
 
 
 def read(path, default=None):
@@ -43,6 +46,19 @@ def write_fan(cpu, gpu):
         f.write(f"{cpu},{gpu}")
 
 
+def load_limit():
+    v = read(CONFIG)
+    if v and v.isdigit() and LIMIT_MIN <= int(v) <= LIMIT_MAX:
+        return int(v)
+    return LIMIT_DEFAULT
+
+
+def save_limit(value):
+    os.makedirs(os.path.dirname(CONFIG), exist_ok=True)
+    with open(CONFIG, "w") as f:
+        f.write(str(value))
+
+
 def milli(path):
     v = read(path)
     return int(v) / 1000 if v and v.lstrip("-").isdigit() else None
@@ -58,6 +74,9 @@ class Window(Adw.ApplicationWindow):
         super().__init__(application=app, title="NitroFan")
         self.set_default_size(460, -1)
         self.mode = "auto"
+        self.target = (0, 0)
+        self.profile = read(PROFILE)
+        self.ticks = 0
         self.gpu_temp = None
         self.updating = False
 
@@ -98,6 +117,13 @@ class Window(Adw.ApplicationWindow):
 
         self.sc_cpu = self.make_scale(g, "Ventoinha CPU")
         self.sc_gpu = self.make_scale(g, "Ventoinha GPU")
+
+        self.limit = Adw.SpinRow.new_with_range(LIMIT_MIN, LIMIT_MAX, 1)
+        self.limit.set_title("Limite de temperatura (°C)")
+        self.limit.set_subtitle("Ventoinhas no máximo ao atingir")
+        self.limit.set_value(load_limit())
+        self.limit.connect("notify::value", self.on_limit)
+        g.add(self.limit)
         self.ready = False
         self.btn_auto.set_active(True)
         self.ready = True
@@ -137,6 +163,7 @@ class Window(Adw.ApplicationWindow):
 
     # --- ações ---
     def apply(self, cpu, gpu, label):
+        self.target = (cpu, gpu)
         try:
             write_fan(cpu, gpu)
             self.status.set_text(label)
@@ -165,6 +192,26 @@ class Window(Adw.ApplicationWindow):
             return
         c, g = int(self.sc_cpu.get_value()), int(self.sc_gpu.get_value())
         self.apply(c, g, f"Manual: CPU {c}% / GPU {g}%.")
+
+    def on_limit(self, *_):
+        try:
+            save_limit(int(self.limit.get_value()))
+        except OSError as e:
+            self.toasts.add_toast(Adw.Toast.new(f"Falha ao salvar limite: {e}"))
+
+    def keep_target(self):
+        """Reaplica o modo escolhido: o driver volta ao automático ao trocar
+        o perfil de energia, e fan_speed só devolve o último valor escrito,
+        então não dá para detectar o reset lendo-o."""
+        profile = read(PROFILE)
+        self.ticks += 1
+        if profile == self.profile and self.ticks < REAPPLY_TICKS:
+            return
+        self.profile, self.ticks = profile, 0
+        try:
+            write_fan(*self.target)
+        except OSError:
+            pass
 
     def on_close(self, *_):
         # Nunca deixar o notebook preso em modo manual ao fechar o app.
@@ -197,10 +244,14 @@ class Window(Adw.ApplicationWindow):
         self.gpu_row.set_subtitle(fmt(self.gpu_temp, rpm(2)))
         hot = max([t for t in (t_cpu, self.gpu_temp) if t is not None],
                   default=0)
-        if self.mode != "auto" and hot >= DANGER_TEMP:
-            self.btn_auto.set_active(True)
+        if not os.path.exists(FAN_SPEED):
+            return True
+        if self.mode != "max" and hot >= self.limit.get_value():
+            self.btn_max.set_active(True)
             self.toasts.add_toast(Adw.Toast.new(
-                f"{hot:.0f} °C: voltando ao modo automático."))
+                f"{hot:.0f} °C: ventoinhas no máximo."))
+        elif self.mode != "auto":
+            self.keep_target()
         return True
 
 
