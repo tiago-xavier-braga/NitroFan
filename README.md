@@ -7,7 +7,7 @@ speed on Acer Nitro laptops running Linux, a stand-in for Acer's Windows-only
 NitroSense.
 
 > **Status:** personal project, tested only on an **Acer Nitro AN517-54**
-> (Manjaro, kernel 7.1, GNOME). Other Nitro models may work through the
+> (Manjaro, kernel 7.2, GNOME). Other Nitro models may work through the
 > driver, but are untested.
 
 ## How it works
@@ -26,9 +26,12 @@ root once your user is in the `linuwu_sense` group.
 - **Maximum** — both fans at 100%.
 - **Manual** — separate CPU and GPU sliders, 30–100%.
 
-Safety nets: manual speed is limited to 30% or more, the app falls back to
-automatic if CPU or GPU reaches 95 °C, and it returns to automatic when the
-window closes.
+Safety nets: manual speed is limited to 30% or more, the fans go to maximum
+when CPU or GPU reaches the temperature limit (90 °C by default, adjustable
+from 60 to 95 °C in the app), the chosen mode is re-applied every 30 s and
+whenever the power profile changes (the driver resets fans to automatic on
+quiet/power-saver profiles), and the app returns to automatic only when the window
+closes.
 
 ## Requirements
 
@@ -42,11 +45,12 @@ window closes.
 1. Install the kernel headers (Manjaro example):
 
    ```bash
-   sudo pacman -S --needed linux71-headers dkms
+   sudo pacman -S --needed linux72-headers dkms
    ```
 
-2. Build and install the patched driver. This replaces `acer_wmi`, blacklists
-   it, and adds your user to the `linuwu_sense` group:
+2. Build and install the patched driver through DKMS (rebuilt automatically
+   on kernel updates). This replaces `acer_wmi`, blacklists it, and adds your
+   user to the `linuwu_sense` group:
 
    ```bash
    ./driver/install.sh
@@ -61,7 +65,10 @@ window closes.
 
 Or run it directly: `python3 app/nitrofan.py`
 
-To remove the driver, run `make uninstall` inside `driver/build/`.
+When you switch to a new kernel series (e.g. 7.2 → 7.3), install its headers
+too (`linux73-headers`) so DKMS can rebuild the module.
+
+To remove the driver: `./driver/uninstall.sh`.
 
 ## Other Nitro models
 
