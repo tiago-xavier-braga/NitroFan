@@ -27,6 +27,8 @@ rm -rf "$BUILD"
 git clone "$REPO" "$BUILD"
 git -C "$BUILD" checkout "$COMMIT"
 git -C "$BUILD" apply "$HERE"/0001-add-nitro-an517-54.patch
+# Kernel 7.x removed strncpy(); memcpy() is equivalent here (copies exactly len bytes).
+sed -i 's/\bstrncpy(/memcpy(/g' "$BUILD/src/$NAME.c"
 
 # 2. Remove any previous install (DKMS or the upstream `make install` copy).
 for v in $(dkms status -m "$NAME" 2>/dev/null | sed -n "s|^$NAME/\([^,:]*\).*|\1|p" | sort -u); do
